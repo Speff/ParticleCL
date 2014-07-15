@@ -31,7 +31,7 @@ void initCL(){
 	initializeArrays();
 	writeToBuffers();
 
-	printf("%f, %f", posP[0].s[0], posP[0].s[0]);
+	//printf("%f, %f", posP[0].s[0], posP[0].s[0]);
 
 	// runSim();
 	// readBuffer();

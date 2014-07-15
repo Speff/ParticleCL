@@ -4,10 +4,10 @@
 #include <stdlib.h>
 #include <math.h>
 
-//#define NUM_PARTICLES	1048576
-#define NUM_PARTICLES	128
-#define ACCEL_X			0
-#define ACCEL_Y			0
+#define NUM_PARTICLES	1048576
+//#define NUM_PARTICLES	128
+#define ACCEL_X			20
+#define ACCEL_Y			80
 #define WIDTH			1280
 #define HEIGHT			720
 #define FRAMERATE		60
