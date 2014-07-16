@@ -13,7 +13,7 @@
 #endif
 
 #define NUM_PARTICLES	1048576
-//#define NUM_PARTICLES	1024
+//#define NUM_PARTICLES	32
 #define ACCEL_X			-1
 #define ACCEL_Y			-1
 #define WIDTH			1280

@@ -164,7 +164,7 @@ int main( int argc, char* args[] )
 			SDL_RenderClear( gRenderer );
 
 			// Create a surface to draw onto
-			newFrameBuffer = SDL_CreateRGBSurface(0,WIDTH,HEIGHT,32,0, 0, 0, amask);
+			newFrameBuffer = SDL_CreateRGBSurface(0,WIDTH,HEIGHT,32,0, 0, 0, 0);
 			//newFrameBuffer = SDL_CreateRGBSurface(0,WIDTH,HEIGHT,32,rmask,gmask,bmask, amask);
 
 
@@ -179,7 +179,7 @@ int main( int argc, char* args[] )
 				//ptr[pixOffset] += SDL_MapRGBA(newFrameBuffer->format, 0x05, 0x01, 0x05, 0xFF);
 				//printf("%#X\n",SDL_MapRGBA(newFrameBuffer->format, 0xAB, 0xCD, 0xEF, 0xAC));
 				// Set the color at offset. Alpha, R, G, B
-				//ptr[pixOffset] += 0xFF100010;
+				//ptr[pixOffset] = 0xFF700070;
 				// Alpha, Red, Green, Blue
 				ptr[pixOffset] += 0xFF100010;
 				//ptr[pixOffset] = 0xFF;
@@ -187,7 +187,6 @@ int main( int argc, char* args[] )
 				//ptr[pixOffset+32+32+32] += 0x80;
 			}
 			SDL_UnlockSurface(newFrameBuffer);
-			//SDL_RenderDrawPoints(gRenderer, pointsToDraw, NUM_PARTICLES);
 
 			Background_Tx = SDL_CreateTextureFromSurface(gRenderer, newFrameBuffer);
 			SDL_FreeSurface(newFrameBuffer);
