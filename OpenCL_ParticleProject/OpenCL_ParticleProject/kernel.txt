@@ -1,0 +1,104 @@
+#ifdef cl_khr_fp64
+    #pragma OPENCL EXTENSION cl_khr_fp64 : enable
+#elif defined(cl_amd_fp64)
+    #pragma OPENCL EXTENSION cl_amd_fp64 : enable
+#else
+#endif
+
+__kernel 
+void updateParticle(__global float2* posC,
+			 		__global float2* posO,
+					__global int2* posCint_out,
+					__global int2* mousePos,
+			 		const int2 size,
+			 		__global float2* t1){
+					
+	float2 oldPos      = (float2)(0.0f, 0.0f);
+	float2 posC_new    = (float2)(0.0f, 0.0f);
+    float dist;
+    float2 pVect;
+    float2 aVect;
+    float2 origin;
+    float sDis;
+    float fieldStrength = 0;
+    float deadzone = 100;
+    float velDamper;
+
+    origin.x = 0.0f;
+    origin.y = 0.0f;
+
+	int gid = get_global_id(0);	
+
+    pVect.x = (float)(mousePos[0].x - posC[gid].x);
+    pVect.y = (float)(mousePos[0].y - posC[gid].y);
+    dist = distance(pVect, origin);
+    sDis = distance(posC[gid], posO[gid]);
+    //iVect = pVect / dist;
+
+    if(dist < deadzone) fieldStrength = -10;
+    if(dist > deadzone) fieldStrength = 1;
+    if(dist > 2*deadzone) fieldStrength = 3;
+    if(dist > 3*deadzone) fieldStrength = 4;
+    if(dist > 4*deadzone) fieldStrength = 5;
+
+    velDamper = .99;
+    if(posC_new.x < 0 || posC_new.y < 0 || posC_new.x > size.x || posC_new.y > size.y){
+        velDamper = 0;
+        aVect = origin;
+    }
+
+    //if(dist > deadzone){
+        aVect = fieldStrength * pVect/dist;
+
+        if(mousePos[0].x < 0) posC_new = posC[gid] + velDamper*(posC[gid] - posO[gid]);
+        if(mousePos[0].y < 0) posC_new = posC[gid] + velDamper*(posC[gid] - posO[gid]);
+        if(mousePos[0].x > size.x) posC_new = posC[gid] + velDamper*(posC[gid] - posO[gid]);
+        if(mousePos[0].y > size.y) posC_new = posC[gid] + velDamper*(posC[gid] - posO[gid]);
+        else posC_new = posC[gid] + velDamper*(posC[gid] - posO[gid]) + aVect;
+    //}
+    //else posC_new = posC[gid] + velDamper*(posC[gid] - posO[gid]);
+
+    //posC_new = posC[gid] + (0.99f*posC[gid] - 0.99f*posO[gid]);
+
+	oldPos = posC[gid];
+
+	// Bounds Checking
+	if(posC_new.x < 0){
+		posC_new.x = fabs(posC_new.x/2);
+		oldPos.x = -oldPos.x;
+	}
+	else if(posC_new.y < 0){
+		posC_new.y = fabs(posC_new.y/2);
+		oldPos.y = 0-oldPos.y;
+	}
+    else if(posC_new.x > size.x){
+        posC_new.x = 2*size.x - posC_new.x;
+        oldPos.x = 2*size.x - oldPos.x;
+    }
+    else if(posC_new.y > size.y){
+        posC_new.y = 2*size.y - posC_new.y;
+        oldPos.y = 2*size.y - oldPos.y;
+    }
+
+    if(posC_new.x < 0|| posC_new.y < 0 || posC_new.x > size.x || posC_new.y > size.y) {
+        posO[gid] = oldPos;
+        posC[gid] = posC_new;
+        posCint_out[gid].x = (int) origin.x;
+        posCint_out[gid].y = (int) origin.y;
+    }
+    else{
+	   posO[gid] = oldPos;
+	   posC[gid] = posC_new;
+	   posCint_out[gid].x = (int) posC_new.x;
+	   posCint_out[gid].y = (int) posC_new.y;
+    }
+	if(posC_new.x < 0 || posC_new.y < 0 || posC_new.x > 4000 || posC_new.y > 4000){
+    //if(gid == 434){
+	 	t1[0].x = (float) dist;
+        t1[0].y = (float)gid; 
+        t1[1].x = posC_new.x;
+        t1[1].y = posC_new.y;
+        t1[2].x = oldPos.x;
+        t1[2].y = oldPos.y;
+	}
+}

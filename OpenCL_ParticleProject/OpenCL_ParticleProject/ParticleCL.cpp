@@ -12,13 +12,14 @@ extern cl_mem bufPosC;
 extern cl_mem bufPosP;
 extern cl_mem bufPos_int;
 extern cl_mem bufTestVar;
+extern cl_mem bufMousePos;
 
 // Kernel I/O Vars
 extern cl_float2 posC[NUM_PARTICLES];			// Array for current position of Particle[i]
 extern cl_float2 posP[NUM_PARTICLES];			// Array for the position of Particle[i] one from back
 extern cl_int2 pos_int[NUM_PARTICLES];			// (int)posC[i]
 extern cl_float2 kernelTestVal[5];				// Dummy values for debugging kernel
-extern cl_float2 accel;							// Acceleration for for each particle
+extern cl_int2 mousePos[1];						// MousePoseration for for each particle
 extern cl_int2 windowSize;						// Window size
 
 void initCL(){
@@ -29,7 +30,7 @@ void initCL(){
 	setMemMappings();
 
 	initializeArrays();
-	writeToBuffers();
+	writeToBuffersInit();
 
 	//printf("%f, %f", posP[0].s[0], posP[0].s[0]);
 
@@ -47,6 +48,10 @@ bool readBuffer(){
 	//checkErrorCode("Reading bufPos...\t", status);
 	status = clEnqueueReadBuffer(cmdQueue, bufTestVar, CL_TRUE, 0, 5 * sizeof(cl_float2), kernelTestVal, 0, NULL, NULL);
 	//checkErrorCode("Reading bufTestVal...\t", status);
+	clFinish(cmdQueue);
+
+	//printf("Particle: %i\tLocation:\t%f, %f\n\t\t\t\t%f, %f\n", (int) kernelTestVal[0].s[1], kernelTestVal[1].s[0], kernelTestVal[1].s[1], kernelTestVal[2].s[0], kernelTestVal[2].s[1]);
+	//printf("Distance: %f\n", kernelTestVal[0].s[0]);
 
 	return true;
 }
@@ -60,6 +65,7 @@ bool cl_closeAll(){
 	clReleaseMemObject(bufPosP);
 	clReleaseMemObject(bufPos_int);
 	clReleaseMemObject(bufTestVar);
+	clReleaseMemObject(bufMousePos);
 	clReleaseContext(context);
 	free(devices);
 
@@ -83,10 +89,13 @@ bool runSim(){
 	return true;
 }
 
-bool writeToBuffers(){
+bool writeToBuffersInit(){
 	cl_int status;
 	windowSize.s[0] = WIDTH;
 	windowSize.s[1] = HEIGHT;
+
+	mousePos[0].s[0] = -1;
+	mousePos[0].s[1] = -1;
 
 	// Write arrays to the device buffers. bufPos is unnecessary
 	status = clEnqueueWriteBuffer(cmdQueue, bufPosC, CL_FALSE, 0, NUM_PARTICLES * sizeof(cl_float2), posP, 0, NULL, NULL);
@@ -96,7 +105,26 @@ bool writeToBuffers(){
 	status = clEnqueueWriteBuffer(cmdQueue, bufPos_int, CL_FALSE, 0, NUM_PARTICLES * sizeof(cl_int2), pos_int, 0, NULL, NULL);
 	checkErrorCode("Writing bufPos...\t", status);
 	status = clEnqueueWriteBuffer(cmdQueue, bufTestVar, CL_TRUE, 0, 5 * sizeof(cl_float2), kernelTestVal, 0, NULL, NULL);
-	checkErrorCode("Writing testVar...\t", status);
+	checkErrorCode("Writing bufTestVar...\t", status);
+	status = clEnqueueWriteBuffer(cmdQueue, bufMousePos, CL_TRUE, 0, sizeof(cl_int2), mousePos, 0, NULL, NULL);
+	checkErrorCode("Writing bufMousePos...\t", status);
+
+	return true;
+}
+
+bool writeMousePosToBuffers(int x, int y){
+	cl_int status;
+	cl_int2 mouseLoc[1];
+
+
+	mouseLoc[0].s[0] = x;
+	mouseLoc[0].s[1] = y;
+
+	// Write arrays to the device buffers. bufPos is unnecessary
+	status = clEnqueueWriteBuffer(cmdQueue, bufMousePos, CL_TRUE, 0, sizeof(cl_int2), mouseLoc, 0, NULL, NULL);
+	//checkErrorCode("Writing bufMousePos...\t", status);
+
+	//printf("%i\t%i\n", mouseLoc[0].s[0], mouseLoc[0].s[1]);
 
 	return true;
 }
@@ -126,14 +154,16 @@ bool setMemMappings(){
 	checkErrorCode("Creating buf (Pos)...\t", status);
 	bufTestVar = clCreateBuffer(context, CL_MEM_READ_WRITE, 5 * sizeof(cl_float2), NULL, &status);
 	checkErrorCode("Creating buf (T1)...\t", status);
+	bufMousePos = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(cl_int2), NULL, &status);
+	checkErrorCode("Creating buf (MousePos)...\t", status);
 
 	// Associate the input and output buffers & variables with the kernel
-	status = clSetKernelArg(kernel, 0, sizeof(cl_mem), &bufPosC); checkErrorCode("Setting KernelArg(1)...\t", status);
-	status = clSetKernelArg(kernel, 1, sizeof(cl_mem), &bufPosP); checkErrorCode("Setting KernelArg(2)...\t", status);
-	status = clSetKernelArg(kernel, 2, sizeof(cl_mem), &bufPos_int); checkErrorCode("Setting KernelArg(3)...\t", status);
-	status = clSetKernelArg(kernel, 3, sizeof(cl_float2), &accel); checkErrorCode("Setting KernelArg(4)...\t", status);
-	status = clSetKernelArg(kernel, 4, sizeof(cl_int2), &windowSize); checkErrorCode("Setting KernelArg(5)...\t", status);
-	status = clSetKernelArg(kernel, 5, sizeof(cl_mem), &bufTestVar); checkErrorCode("Setting KernelArg(6)...\t", status);
+	status = clSetKernelArg(kernel, 0, sizeof(cl_mem), &bufPosC); checkErrorCode("Setting KernelArg(0)...\t", status);
+	status = clSetKernelArg(kernel, 1, sizeof(cl_mem), &bufPosP); checkErrorCode("Setting KernelArg(1)...\t", status);
+	status = clSetKernelArg(kernel, 2, sizeof(cl_mem), &bufPos_int); checkErrorCode("Setting KernelArg(2)...\t", status);
+	status = clSetKernelArg(kernel, 3, sizeof(cl_mem), &bufMousePos); checkErrorCode("Setting KernelArg(3)...\t", status);
+	status = clSetKernelArg(kernel, 4, sizeof(cl_int2), &windowSize); checkErrorCode("Setting KernelArg(4)...\t", status);
+	status = clSetKernelArg(kernel, 5, sizeof(cl_mem), &bufTestVar); checkErrorCode("Setting KernelArg(5)...\t", status);
 
 	return true;
 }

@@ -5,9 +5,13 @@ and may not be redistributed without written permission.*/
 #include "SDL_Test.h"
 #include <ctime>
 
+
 //Screen dimension constants
 const int SCREEN_WIDTH = WIDTH;
 const int SCREEN_HEIGHT = HEIGHT;
+bool mouseMoved = false;
+int mouseLocationX;
+int mouseLocationY;
 
 // OpenCL Vars
 char* kernelSource;
@@ -21,13 +25,14 @@ cl_mem bufPosC;
 cl_mem bufPosP;
 cl_mem bufPos_int;
 cl_mem bufTestVar;
+cl_mem bufMousePos;
 
 // Kernel I/O Vars
 cl_float2 posC[NUM_PARTICLES];			// Array for current position of Particle[i]
 cl_float2 posP[NUM_PARTICLES];			// Array for the position of Particle[i] one frame back
 cl_int2 pos_int[NUM_PARTICLES];			// (int)posC[i]
 cl_float2 kernelTestVal[5];				// Dummy values for debugging kernel
-cl_float2 accel = {ACCEL_X,ACCEL_Y};	// Acceleration for for each particle
+cl_int2 mousePos[1];					// MousePosition for each particle
 cl_int2 windowSize = {WIDTH, HEIGHT};	// Window size
 
 // SDL Vars
@@ -64,7 +69,7 @@ bool init(){
 		}
 		//SDL_WINDOWPOS_UNDEFINED
 		//Create window
-		gWindow = SDL_CreateWindow( "Particle Sim", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN );
+		gWindow = SDL_CreateWindow( "Particle Sim", 400, 200, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN );
 		if( gWindow == NULL ){
 			printf( "Window could not be created! SDL Error: %s\n", SDL_GetError() );
 			success = false;
@@ -131,13 +136,23 @@ int main( int argc, char* args[] )
 					return 0;
 				}
 				if (e.type == SDL_MOUSEMOTION){
-
+					mouseMoved = true;
+					if(!((int)e.motion.x == 0) && !((int)e.motion.x == 0)){
+						mouseLocationX = (int) e.motion.x;
+						mouseLocationY = (int) e.motion.y;
+						//printf("%i,%i\n", mouseLocationX, mouseLocationY);
+					}
 				}
+			}
+
+			if(mouseMoved){
+				mouseMoved = false;
+				writeMousePosToBuffers(mouseLocationX, mouseLocationY);
 			}
 
 			// Start the timer
 			start = std::clock();
-			
+
 			// Run kernel
 			runSim();
 			readBuffer();
@@ -150,25 +165,28 @@ int main( int argc, char* args[] )
 
 			// Create a surface to draw onto
 			newFrameBuffer = SDL_CreateRGBSurface(0,WIDTH,HEIGHT,32,0, 0, 0, amask);
+			//newFrameBuffer = SDL_CreateRGBSurface(0,WIDTH,HEIGHT,32,rmask,gmask,bmask, amask);
 
+
+			SDL_LockSurface(newFrameBuffer);
+			// Create pointer to pixel matrix in Surface
+			ptr = (Uint32*)newFrameBuffer->pixels;
 			// Draw Points
 			for( long i = 0; i < NUM_PARTICLES; i += 1 ){
-				//printf("%li, %li\n",pos_int[i].s[0], pos_int[i].s[1]);
-
-				if(pos_int[i].s[0] > 0 && pos_int[i].s[0] < WIDTH){
-					if(pos_int[i].s[1] > 0 && pos_int[i].s[1] < HEIGHT){
-						// Create pointer to pixel matrix in Surface
-						ptr = (Uint32*)newFrameBuffer->pixels;
-						// Get offset for pixel pointed to from kernel
-						long pixOffset = (pos_int[i].s[1]) * (newFrameBuffer->pitch/4) + pos_int[i].s[0] * newFrameBuffer->format->BytesPerPixel / 4;
-						////ptr[pixOffset] = SDL_MapRGBA(newFrameBuffer->format, 0x6F, 0x6F, 0x6F, 0x6A);
-						// Set the color at offset. Alpha, R, G, B
-						ptr[pixOffset] += 0xFF060006;
-					}
-				}
-
-
+				// Get offset for pixel pointed to from kernel
+				long pixOffset = (pos_int[i].s[1]) * (newFrameBuffer->pitch/4) + pos_int[i].s[0] * newFrameBuffer->format->BytesPerPixel / 4;
+				//printf("%i,%i\n%li. Particle %li\n", pos_int[i].s[0],pos_int[i].s[1],pixOffset, i);
+				//ptr[pixOffset] += SDL_MapRGBA(newFrameBuffer->format, 0x05, 0x01, 0x05, 0xFF);
+				//printf("%#X\n",SDL_MapRGBA(newFrameBuffer->format, 0xAB, 0xCD, 0xEF, 0xAC));
+				// Set the color at offset. Alpha, R, G, B
+				//ptr[pixOffset] += 0xFF100010;
+				// Alpha, Red, Green, Blue
+				ptr[pixOffset] += 0xFF100010;
+				//ptr[pixOffset] = 0xFF;
+				//ptr[pixOffset+32] += 0x80;
+				//ptr[pixOffset+32+32+32] += 0x80;
 			}
+			SDL_UnlockSurface(newFrameBuffer);
 			//SDL_RenderDrawPoints(gRenderer, pointsToDraw, NUM_PARTICLES);
 
 			Background_Tx = SDL_CreateTextureFromSurface(gRenderer, newFrameBuffer);
@@ -180,8 +198,10 @@ int main( int argc, char* args[] )
 			SDL_RenderPresent( gRenderer );
 
 			if(++loopCounter%120 == 0){
-			duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
-			printf("FPS: %f\n", 1/duration);
+
+				printf("%i, %i\n", pos_int[0].s[0], pos_int[0].s[0]);
+				duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+				printf("FPS: %f\n", 1/duration);
 			}
 		}
 
