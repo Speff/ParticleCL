@@ -170,7 +170,7 @@ bool setMemMappings(){
 
 bool compileKernel(){
 	FILE *fp;
-	char fileLocation[] = "C:/kernels/kernel.txt";
+	char fileLocation[] = "C:/Users/Sahil/Documents/Visual Studio 2012/Projects/OpenCL_ParticleProject/OpenCL_ParticleProject/kernel.txt";
 	size_t sourceSize;
 	cl_int status;
 
@@ -249,7 +249,7 @@ bool boilerplateCode(){
 
 	char* devName;
 	size_t nameSize;
-	clGetDeviceInfo(devices[0], CL_DEVICE_NAME, NULL, NULL, &nameSize);
+	clGetDeviceInfo(devices[1], CL_DEVICE_NAME, NULL, NULL, &nameSize);
 	devName = (char*)malloc(nameSize);
 	clGetDeviceInfo(devices[0], CL_DEVICE_NAME, nameSize, devName, NULL);
 	if(status == CL_SUCCESS && VERBOSE) printf("Using device:\t\t%s\n", devName); 
