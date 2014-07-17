@@ -32,7 +32,6 @@ void updateParticle(__global float2* posC,
     pVect.x = (float)(mousePos[0].x - posC[gid].x);
     pVect.y = (float)(mousePos[0].y - posC[gid].y);
     dist = distance(pVect, origin);
-    //iVect = pVect / dist;
 
     //if(dist < deadzone) fieldStrength = -10;
     //if(dist > deadzone) fieldStrength = 1;

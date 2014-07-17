@@ -170,7 +170,7 @@ bool setMemMappings(){
 
 bool compileKernel(){
 	FILE *fp;
-	char fileLocation[] = "C:/Users/Sahil/Documents/Visual Studio 2012/Projects/OpenCL_ParticleProject/OpenCL_ParticleProject/kernel.txt";
+	char fileLocation[] = "C:/Users/Sahil/Documents/Visual Studio 2012/Projects/OpenCLGL_Project/OpenCLGL_Project/kernel.txt";
 	size_t sourceSize;
 	cl_int status;
 
@@ -230,13 +230,13 @@ bool boilerplateCode(){
 	checkErrorCode("Filling platforms...\t", status);
 
 	// Retrieve the number of devices
-	status = clGetDeviceIDs(platforms[1], CL_DEVICE_TYPE_ALL, 0, NULL, &numDevices);
+	status = clGetDeviceIDs(platforms[1], CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 
 	// Allocate space for each device
 	devices = (cl_device_id*)malloc(numDevices * sizeof(cl_device_id));
 
 	// Fill in the devices
-	status = clGetDeviceIDs(platforms[1], CL_DEVICE_TYPE_ALL, numDevices, devices, NULL);
+	status = clGetDeviceIDs(platforms[1], CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
 	checkErrorCode("Filling devices...\t", status);
 
 	// Create a contect and associate it with the devices
@@ -249,7 +249,7 @@ bool boilerplateCode(){
 
 	char* devName;
 	size_t nameSize;
-	clGetDeviceInfo(devices[1], CL_DEVICE_NAME, NULL, NULL, &nameSize);
+	clGetDeviceInfo(devices[0], CL_DEVICE_NAME, NULL, NULL, &nameSize);
 	devName = (char*)malloc(nameSize);
 	clGetDeviceInfo(devices[0], CL_DEVICE_NAME, nameSize, devName, NULL);
 	if(status == CL_SUCCESS && VERBOSE) printf("Using device:\t\t%s\n", devName); 

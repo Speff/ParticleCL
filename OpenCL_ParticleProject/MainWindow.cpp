@@ -69,7 +69,7 @@ bool init(){
 		}
 		//SDL_WINDOWPOS_UNDEFINED
 		//Create window
-		gWindow = SDL_CreateWindow( "Particle Sim", 400, 200, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN );
+		gWindow = SDL_CreateWindow( "Particle Sim", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN );
 		if( gWindow == NULL ){
 			printf( "Window could not be created! SDL Error: %s\n", SDL_GetError() );
 			success = false;
@@ -109,7 +109,9 @@ int main( int argc, char* args[] )
 	std::clock_t start;
 	int loopCounter = 0;
 	double duration = 0;
+	double checkpoint_1, checkpoint_2 = 0;
 	Uint32 *ptr;
+	long pixOffset;
 
 	initCL();
 
@@ -157,48 +159,75 @@ int main( int argc, char* args[] )
 			runSim();
 			readBuffer();
 
-			// Draw output
+			if(loopCounter%119 == 0){
+				checkpoint_1 = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+				printf("Kernel runtime:\t\t %f ms\n", checkpoint_1);
+			}
 
 			//Clear screen
 			SDL_SetRenderDrawColor( gRenderer, 0xFF, 0xFF, 0xFF, 0xFF );
 			SDL_RenderClear( gRenderer );
 
+			if(loopCounter%119 == 0){
+				checkpoint_2 = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+				printf("Clear screen time:\t %f ms\n", checkpoint_2-checkpoint_1);
+			}
+
 			// Create a surface to draw onto
 			newFrameBuffer = SDL_CreateRGBSurface(0,WIDTH,HEIGHT,32,0, 0, 0, 0);
 			//newFrameBuffer = SDL_CreateRGBSurface(0,WIDTH,HEIGHT,32,rmask,gmask,bmask, amask);
 
+			if(loopCounter%119 == 0){
+				checkpoint_1 = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+				printf("Create surface time:\t %f ms\n", checkpoint_1-checkpoint_2);
+			}
 
-			SDL_LockSurface(newFrameBuffer);
+			//SDL_LockSurface(newFrameBuffer);
 			// Create pointer to pixel matrix in Surface
 			ptr = (Uint32*)newFrameBuffer->pixels;
-			// Draw Points
+			// Draw Points - this is the slowest part
 			for( long i = 0; i < NUM_PARTICLES; i += 1 ){
-				// Get offset for pixel pointed to from kernel
-				long pixOffset = (pos_int[i].s[1]) * (newFrameBuffer->pitch/4) + pos_int[i].s[0] * newFrameBuffer->format->BytesPerPixel / 4;
-				//printf("%i,%i\n%li. Particle %li\n", pos_int[i].s[0],pos_int[i].s[1],pixOffset, i);
+				// Get offset for pixel pointed to from kernel.
+				pixOffset = (pos_int[i].s[1]) * (newFrameBuffer->pitch/4) + pos_int[i].s[0] * newFrameBuffer->format->BytesPerPixel / 4;
+				// Optimized version. +10fps woo.
+				//pixOffset = (pos_int[i].s[1]<<4) * (80) + pos_int[i].s[0];
+				// Slow as fuck version
 				//ptr[pixOffset] += SDL_MapRGBA(newFrameBuffer->format, 0x05, 0x01, 0x05, 0xFF);
-				//printf("%#X\n",SDL_MapRGBA(newFrameBuffer->format, 0xAB, 0xCD, 0xEF, 0xAC));
-				// Set the color at offset. Alpha, R, G, B
-				//ptr[pixOffset] = 0xFF700070;
+
 				// Alpha, Red, Green, Blue
 				ptr[pixOffset] += 0xFF100010;
-				//ptr[pixOffset] = 0xFF;
+				//ptr[pixOffset] = 0x7;
 				//ptr[pixOffset+32] += 0x80;
 				//ptr[pixOffset+32+32+32] += 0x80;
 			}
-			SDL_UnlockSurface(newFrameBuffer);
+			//SDL_UnlockSurface(newFrameBuffer);
+			//printf("%i, %i\n", newFrameBuffer->pitch, newFrameBuffer->format->BytesPerPixel);
+
+			if(loopCounter%119 == 0){
+				checkpoint_2 = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+				printf("Draw pixels time:\t %f ms\n", checkpoint_2-checkpoint_1);
+			}
 
 			Background_Tx = SDL_CreateTextureFromSurface(gRenderer, newFrameBuffer);
-			SDL_FreeSurface(newFrameBuffer);
 			SDL_RenderCopy(gRenderer, Background_Tx, NULL, NULL);
+
+			if(loopCounter%119 == 0){
+				checkpoint_1 = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+				printf("Create pixel tex:\t %f ms\n", checkpoint_1-checkpoint_2);
+			}
+
+			SDL_FreeSurface(newFrameBuffer);
 			SDL_DestroyTexture(Background_Tx);
 
 			//Update screen
 			SDL_RenderPresent( gRenderer );
 
-			if(++loopCounter%120 == 0){
+			if(loopCounter%119 == 0){
+				checkpoint_2 = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
+				printf("Paint screen time:\t %f ms\n", checkpoint_2-checkpoint_1);
+			}
 
-				printf("%i, %i\n", pos_int[0].s[0], pos_int[0].s[0]);
+			if(++loopCounter%120 == 0){
 				duration = ( std::clock() - start ) / (double) CLOCKS_PER_SEC;
 				printf("FPS: %f\n", 1/duration);
 			}
