@@ -1,0 +1,102 @@
+#ifdef cl_khr_fp64
+    #pragma OPENCL EXTENSION cl_khr_fp64 : enable
+#elif defined(cl_amd_fp64)
+    #pragma OPENCL EXTENSION cl_amd_fp64 : enable
+#else
+#endif
+
+__kernel void updateParticle(__global float2* posC,
+                             __global float2* posO,
+                             __global uint* posC_pixelPointer,
+                             const __global int2* mousePos,
+                             const int2 size,
+                             __global float2* TestVar){
+					
+	float2 oldPos      = (float2)(0.0f, 0.0f);
+	float2 posC_new    = (float2)(0.0f, 0.0f);
+    float2 origin      = (float2)(0.0f, 0.0f);
+    float dist;
+    float2 pVect;
+    float2 aVect;
+    float fieldStrength = 0;
+    float deadzone = 50;
+    float velDamper;
+    bool invalidLocation = false;
+
+	int gid = get_global_id(0);	
+    
+    pVect.x = (float)(mousePos[0].x - posC[gid].x);
+    pVect.y = (float)(mousePos[0].y - posC[gid].y);
+    dist = distance(pVect, origin);
+
+    // if(dist < deadzone) fieldStrength = -10;
+    // if(dist > deadzone) fieldStrength = 1;
+    // if(dist > 2*deadzone) fieldStrength = 3;
+    // if(dist > 3*deadzone) fieldStrength = 4;
+    // if(dist > 4*deadzone) fieldStrength = 5;
+
+    if(dist < deadzone) fieldStrength = -10;
+    else if(dist < 2*deadzone) fieldStrength = 1;
+    else if(dist > 3*deadzone) fieldStrength = 3;
+    else if(dist > 4*deadzone) fieldStrength = 4;
+    else if(dist > 4*deadzone) fieldStrength = 5;
+
+    // if(dist < deadzone) fieldStrength = -10;
+    // else if(dist > 1*deadzone) fieldStrength = 1;
+    // else if(dist > 2*deadzone) fieldStrength = 3;
+    // else if(dist > 3*deadzone) fieldStrength = 4;
+    // else if(dist > 4*deadzone) fieldStrength = 5;
+
+    velDamper = .98;
+    
+    if(posC[gid].x < 0 || posC[gid].y < 0 || posC[gid].x > size.x || posC[gid].y > size.y){
+        velDamper = 0;
+        aVect = origin;
+    }
+
+    aVect = fieldStrength * pVect/dist;
+
+    if(mousePos[0].x < 0 || mousePos[0].y < 0 || mousePos[0].x > size.x || mousePos[0].y > size.y){
+        posC_new = posC[gid] + velDamper*(posC[gid] - posO[gid]);
+    }
+    else posC_new = posC[gid] + velDamper*(posC[gid] - posO[gid]) + aVect;
+
+    //posC_new = posC[gid] + velDamper*(posC[gid] - posO[gid]);
+
+	oldPos = posC[gid];
+
+	// Bounds Checking. If the particle is outside the window, it wont draw it
+	if(posC_new.x < 0){
+		posC_new.x = 0-posC_new.x/2;
+		oldPos.x = 0-oldPos.x;
+        invalidLocation = true;
+	}
+	else if(posC_new.y < 0){
+		posC_new.y = 0-posC_new.y/2;
+		oldPos.y = 0-oldPos.y;
+        invalidLocation = true;
+	}
+    else if(posC_new.x > size.x){
+        posC_new.x = 2*size.x - posC_new.x;
+        oldPos.x = 2*size.x - oldPos.x;
+        invalidLocation = true;
+    }
+    else if(posC_new.y > size.y){
+        posC_new.y = 2*size.y - posC_new.y;
+        oldPos.y = 2*size.y - oldPos.y;
+        invalidLocation = true;
+    }
+
+    if(invalidLocation) {
+        posO[gid] = oldPos;
+        posC[gid] = posC_new;
+        posC_pixelPointer[gid] = 0;
+    }
+    else{
+	   posO[gid] = oldPos;
+	   posC[gid] = posC_new;
+       // See MainWindow.cpp file for explanation
+	   posC_pixelPointer[gid] = ((int)posC_new.y)*size.x + (int)posC_new.x;
+       //posC_pixelPointer[gid] = (size.x*(int)posC_new.y + (int)posC_new.x);
+    }
+}
