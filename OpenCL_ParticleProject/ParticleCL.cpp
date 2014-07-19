@@ -10,17 +10,23 @@ extern cl_command_queue cmdQueue;
 extern cl_kernel kernel;
 extern cl_mem bufPosC;
 extern cl_mem bufPosP;
-extern cl_mem bufPos_int;
+extern cl_mem bufposC_pixelPointer;
 extern cl_mem bufTestVar;
 extern cl_mem bufMousePos;
+extern cl_mem bufOutputPixelArray;
+extern cl_mem bufFieldStrength;
 
 // Kernel I/O Vars
 extern cl_float2 posC[NUM_PARTICLES];			// Array for current position of Particle[i]
 extern cl_float2 posP[NUM_PARTICLES];			// Array for the position of Particle[i] one from back
-extern cl_int2 pos_int[NUM_PARTICLES];			// (int)posC[i]
+extern cl_uint posC_pixelPointer[NUM_PARTICLES];// (int)posC[i]
+extern cl_uint outputPixelArray[32*WIDTH*HEIGHT];
 extern cl_float2 kernelTestVal[5];				// Dummy values for debugging kernel
 extern cl_int2 mousePos[1];						// MousePoseration for for each particle
 extern cl_int2 windowSize;						// Window size
+extern cl_float deadZone;
+extern cl_float fieldStrength[10];
+extern cl_float velDamper_input;
 
 void initCL(){
 	printf("Initializing...\n");
@@ -44,14 +50,14 @@ bool readBuffer(){
 	cl_int status;
 
 	// Read the device output buffer to the host output array
-	status = clEnqueueReadBuffer(cmdQueue, bufPos_int, CL_FALSE, 0, NUM_PARTICLES * sizeof(cl_int2), pos_int, 0, NULL, NULL);
+	status = clEnqueueReadBuffer(cmdQueue, bufposC_pixelPointer, CL_FALSE, 0, NUM_PARTICLES * sizeof(cl_uint), posC_pixelPointer, 0, NULL, NULL);
 	//checkErrorCode("Reading bufPos...\t", status);
 	status = clEnqueueReadBuffer(cmdQueue, bufTestVar, CL_TRUE, 0, 5 * sizeof(cl_float2), kernelTestVal, 0, NULL, NULL);
 	//checkErrorCode("Reading bufTestVal...\t", status);
 	clFinish(cmdQueue);
 
 	//printf("Particle: %i\tLocation:\t%f, %f\n\t\t\t\t%f, %f\n", (int) kernelTestVal[0].s[1], kernelTestVal[1].s[0], kernelTestVal[1].s[1], kernelTestVal[2].s[0], kernelTestVal[2].s[1]);
-	//printf("Distance: %f\n", kernelTestVal[0].s[0]);
+	//
 
 	return true;
 }
@@ -63,7 +69,7 @@ bool cl_closeAll(){
 	clReleaseCommandQueue(cmdQueue);
 	clReleaseMemObject(bufPosC);
 	clReleaseMemObject(bufPosP);
-	clReleaseMemObject(bufPos_int);
+	clReleaseMemObject(bufposC_pixelPointer);
 	clReleaseMemObject(bufTestVar);
 	clReleaseMemObject(bufMousePos);
 	clReleaseContext(context);
@@ -102,11 +108,13 @@ bool writeToBuffersInit(){
 	checkErrorCode("Writing bufPosC...\t", status);
 	status = clEnqueueWriteBuffer(cmdQueue, bufPosP, CL_FALSE, 0, NUM_PARTICLES * sizeof(cl_float2), posC, 0, NULL, NULL);
 	checkErrorCode("Writing bufPosP...\t", status);
-	status = clEnqueueWriteBuffer(cmdQueue, bufPos_int, CL_FALSE, 0, NUM_PARTICLES * sizeof(cl_int2), pos_int, 0, NULL, NULL);
+	status = clEnqueueWriteBuffer(cmdQueue, bufposC_pixelPointer, CL_FALSE, 0, NUM_PARTICLES * sizeof(cl_uint), posC_pixelPointer, 0, NULL, NULL);
 	checkErrorCode("Writing bufPos...\t", status);
 	status = clEnqueueWriteBuffer(cmdQueue, bufTestVar, CL_TRUE, 0, 5 * sizeof(cl_float2), kernelTestVal, 0, NULL, NULL);
 	checkErrorCode("Writing bufTestVar...\t", status);
 	status = clEnqueueWriteBuffer(cmdQueue, bufMousePos, CL_TRUE, 0, sizeof(cl_int2), mousePos, 0, NULL, NULL);
+	checkErrorCode("Writing bufMousePos...\t", status);
+	status = clEnqueueWriteBuffer(cmdQueue, bufFieldStrength, CL_TRUE, 0, 10*sizeof(cl_float), fieldStrength, 0, NULL, NULL);
 	checkErrorCode("Writing bufMousePos...\t", status);
 
 	return true;
@@ -124,20 +132,41 @@ bool writeMousePosToBuffers(int x, int y){
 	status = clEnqueueWriteBuffer(cmdQueue, bufMousePos, CL_TRUE, 0, sizeof(cl_int2), mouseLoc, 0, NULL, NULL);
 	//checkErrorCode("Writing bufMousePos...\t", status);
 
-	//printf("%i\t%i\n", mouseLoc[0].s[0], mouseLoc[0].s[1]);
+	return true;
+}
+
+bool writenewFieldStrengths(cl_float fs[]){
+	cl_int status;
+
+	// Write arrays to the device buffers. bufPos is unnecessary
+	status = clEnqueueWriteBuffer(cmdQueue, bufFieldStrength, CL_TRUE, 0, 10*sizeof(cl_float), fs, 0, NULL, NULL);
+	//checkErrorCode("Writing bufMousePos...\t", status);
+	
+	status  = clSetKernelArg(kernel, 6, sizeof(cl_float), &velDamper_input); checkErrorCode("Setting KernelArg(6)...\t", status);
 
 	return true;
 }
 
 bool initializeArrays(){
+	printf("Init arrays\n");
+	long nRows = (long)(sqrtf(NUM_PARTICLES) * sqrtf((float)HEIGHT/(float)WIDTH));
+	long nCols = (long)(NUM_PARTICLES/nRows);
+	printf("%f, %f\n", nRows, nCols);
 	for(int i = 0; i < NUM_PARTICLES; i++){
+		posC[i].s[0] = (i%nRows)*(float)nCols/WIDTH *1.556;
+		posC[i].s[1] = (i - i%nRows)/(float)WIDTH*.875;
+		posP[i].s[0] = posC[i].s[0];
+		posP[i].s[1] = posC[i].s[1];
+		/*
 		posC[i].s[0] = WIDTH/2;
 		posC[i].s[1] = HEIGHT/2;
 
 		// Old Position (One frame back) = Current position - Velocity vector/Framerate
 		posP[i].s[0] = posC[i].s[0] - (PIXEL_VELOCITY/FRAMERATE) * cos(2 * PI * ((float)i/NUM_PARTICLES));
 		posP[i].s[1] = posC[i].s[1] - (PIXEL_VELOCITY/FRAMERATE) * sin(2 * PI * ((float)i/NUM_PARTICLES));
+		*/
 	}
+	printf("Init done\n");
 
 	return true;
 }
@@ -145,32 +174,51 @@ bool initializeArrays(){
 bool setMemMappings(){
 	cl_int status;
 
+	deadZone = 30;
+	fieldStrength[0] = -10;
+	fieldStrength[1] = -10;
+	fieldStrength[2] = 1;
+	fieldStrength[3] = 1;
+	fieldStrength[4] = 0;
+	fieldStrength[5] = 0;
+	fieldStrength[6] = 2;
+	fieldStrength[7] = 2;
+	fieldStrength[8] = 3;
+	fieldStrength[9] = 2;
+	velDamper_input = .985;
+
+
 	// Create a buffer object
 	bufPosC = clCreateBuffer(context, CL_MEM_READ_WRITE, NUM_PARTICLES * sizeof(cl_float2), NULL, &status);
 	checkErrorCode("Creating buf (PosC)...\t", status);
 	bufPosP = clCreateBuffer(context, CL_MEM_READ_WRITE, NUM_PARTICLES * sizeof(cl_float2), NULL, &status);
 	checkErrorCode("Creating buf (PosP)...\t", status);
-	bufPos_int = clCreateBuffer(context, CL_MEM_WRITE_ONLY, NUM_PARTICLES * sizeof(cl_int2), NULL, &status);
+	bufposC_pixelPointer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, NUM_PARTICLES * sizeof(cl_uint), NULL, &status);
 	checkErrorCode("Creating buf (Pos)...\t", status);
 	bufTestVar = clCreateBuffer(context, CL_MEM_READ_WRITE, 5 * sizeof(cl_float2), NULL, &status);
 	checkErrorCode("Creating buf (T1)...\t", status);
 	bufMousePos = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(cl_int2), NULL, &status);
-	checkErrorCode("Creating buf (MousePos)...\t", status);
+	checkErrorCode("Creating buf (MousePos)...", status);
+	bufFieldStrength = clCreateBuffer(context, CL_MEM_READ_ONLY, 10*sizeof(cl_float), NULL, &status);
+	checkErrorCode("Creating buf (FS)...", status);
 
 	// Associate the input and output buffers & variables with the kernel
 	status = clSetKernelArg(kernel, 0, sizeof(cl_mem), &bufPosC); checkErrorCode("Setting KernelArg(0)...\t", status);
 	status = clSetKernelArg(kernel, 1, sizeof(cl_mem), &bufPosP); checkErrorCode("Setting KernelArg(1)...\t", status);
-	status = clSetKernelArg(kernel, 2, sizeof(cl_mem), &bufPos_int); checkErrorCode("Setting KernelArg(2)...\t", status);
+	status = clSetKernelArg(kernel, 2, sizeof(cl_mem), &bufposC_pixelPointer); checkErrorCode("Setting KernelArg(2)...\t", status);
 	status = clSetKernelArg(kernel, 3, sizeof(cl_mem), &bufMousePos); checkErrorCode("Setting KernelArg(3)...\t", status);
-	status = clSetKernelArg(kernel, 4, sizeof(cl_int2), &windowSize); checkErrorCode("Setting KernelArg(4)...\t", status);
-	status = clSetKernelArg(kernel, 5, sizeof(cl_mem), &bufTestVar); checkErrorCode("Setting KernelArg(5)...\t", status);
+	status  = clSetKernelArg(kernel, 4, sizeof(cl_float), &deadZone); checkErrorCode("Setting KernelArg(4)...\t", status);
+	status = clSetKernelArg(kernel, 5, sizeof(cl_mem), &bufFieldStrength); checkErrorCode("Setting KernelArg(5)...\t", status);
+	status  = clSetKernelArg(kernel, 6, sizeof(cl_float), &velDamper_input); checkErrorCode("Setting KernelArg(6)...\t", status);
+	status  = clSetKernelArg(kernel, 7, sizeof(cl_int2), &windowSize); checkErrorCode("Setting KernelArg(7)...\t", status);
+	status = clSetKernelArg(kernel, 8, sizeof(cl_mem), &bufTestVar); checkErrorCode("Setting KernelArg(8)...\t", status);
 
 	return true;
 }
 
 bool compileKernel(){
 	FILE *fp;
-	char fileLocation[] = "C:/Users/Sahil/Documents/Visual Studio 2012/Projects/OpenCLGL_Project/OpenCLGL_Project/kernel.txt";
+	char fileLocation[] = "../kernel.txt";
 	size_t sourceSize;
 	cl_int status;
 
@@ -208,6 +256,7 @@ bool compileKernel(){
 	// Create the vector addition kernel
 	kernel = clCreateKernel(program, "updateParticle", &status);
 	checkErrorCode("Creating kernel...\t", status);
+
 
 	return true;
 }
